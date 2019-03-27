@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cstring>
 #include "uv.h"
 
 void on_connection(uv_stream_t* server, int status);
@@ -103,9 +104,11 @@ void on_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     // so we need just to copy buffer that we got and write to TCP connection
     uv_write_t *write_handle = (uv_write_t*) malloc(sizeof(uv_write_t));
     uv_buf_t *writable_buf = (uv_buf_t*) malloc(sizeof(uv_buf_t));
+    ++nread;
     writable_buf->base = (char*) malloc((size_t)nread);
     writable_buf->len = (size_t)nread;
-    memcpy(writable_buf->base, buf->base, writable_buf->len);
+    writable_buf->base[0] = '+';
+    memcpy(writable_buf->base + 1, buf->base, writable_buf->len);
     write_handle->data = writable_buf;
     uv_write(write_handle, stream, writable_buf, 1, on_write_callback);
 }

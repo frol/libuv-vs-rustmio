@@ -6,3 +6,6 @@ authors = ["Tigran Bayburtsyan <tigran@bayburtsyan.com>"]
 [dependencies]
 mio = "0.6"
 slab = "0.3.0"
+
+[profile.release]
+debug = true

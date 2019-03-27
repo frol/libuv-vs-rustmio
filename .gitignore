@@ -1,3 +1,10 @@
 .idea
+
+build
 cmake-build-debug
 libuv
+
+target
+
+flamegraph.svg
+perf.data*

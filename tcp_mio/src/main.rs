@@ -98,14 +98,16 @@ fn main() {
                             // reading socket data until the end
                             loop {
                                 // trying to read data from socket
-                                match conn.socket.read(&mut readable_buffer) {
-                                    Ok(rs) => {
+                                readable_buffer[0] = b'+';
+                                match conn.socket.read(&mut readable_buffer[1..]) {
+                                    Ok(mut rs) => {
                                         // if we don't have error and data is not available
                                         // then probably it is EOF for this socket, so we need to close connection
                                         if rs == 0 {
                                             need_to_close = true;
                                             break;
                                         } else {
+                                            rs += 1;
                                             // writing buffer to socket and getting size of how match bytes written
                                             // if we are getting an error then we will try to write to connecton on next cycle
                                             let write_size = match conn.socket.write(&readable_buffer[0..rs]) {

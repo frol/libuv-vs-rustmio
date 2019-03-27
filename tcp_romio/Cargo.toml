@@ -1,0 +1,12 @@
+[package]
+name = "tcp_romio"
+version = "0.1.0"
+authors = ["Vlad Frolov <frolvlad@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+futures-preview = "0.3.0-alpha.13"
+romio = "0.3.0-alpha.2"
+
+[profile.release]
+debug = true
