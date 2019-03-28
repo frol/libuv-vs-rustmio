@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 tokio = "0.1.17"
+bytes = "0.4"
+bytecount = "0.5"
 
 [profile.release]
 debug = true
