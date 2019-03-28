@@ -1,0 +1,16 @@
+[package]
+name = "bench-tokio"
+version = "0.1.0"
+authors = ["Vlad Frolov <frolvlad@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tokio-io = "0.1.12"
+tokio-proto = "0.1.1"
+tokio-service = "0.1.0"
+tokio-core = "0.1.17"
+tokio-codec = "0.1.1"
+futures = "0.1.25"
+
+[profile.release]
+debug = true
