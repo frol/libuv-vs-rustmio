@@ -6,3 +6,6 @@ edition = "2018"
 
 [dependencies]
 threadpool = "1.7.1"
+
+[profile.release]
+debug = true

@@ -5,3 +5,6 @@ authors = ["Vlad Frolov <frolvlad@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+
+[profile.release]
+debug = true

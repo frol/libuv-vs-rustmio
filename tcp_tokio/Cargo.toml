@@ -6,3 +6,6 @@ edition = "2018"
 
 [dependencies]
 tokio = "0.1.17"
+
+[profile.release]
+debug = true
