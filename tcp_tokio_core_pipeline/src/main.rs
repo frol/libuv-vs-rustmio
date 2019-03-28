@@ -18,15 +18,10 @@ impl Codec for BytesCodec {
         if let Some(i) = buf.as_slice().iter().position(|&b| b == b'\n') {
             // remove the line, including the '\n', from the buffer
             let full_line = buf.drain_to(i + 1);
-
-            // strip the'`\n'
-            let slice = &full_line.as_slice()[..i];
-
-            Ok(Some(slice.to_owned()))
+            Ok(Some(full_line.as_slice().to_owned()))
         } else {
             Ok(None)
         }
-        //Ok(Some(buf.as_slice().to_owned()))
     }
 
     fn decode_eof(&mut self, buf: &mut EasyBuf) -> io::Result<Self::Out> {
