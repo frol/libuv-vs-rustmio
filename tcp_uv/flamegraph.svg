@@ -1,0 +1,300 @@
+<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg version="1.1" width="1200" height="246" onload="init(evt)" viewBox="0 0 1200 246" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><!--Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples.--><defs><linearGradient id="background" y1="0" y2="1" x1="0" x2="0"><stop stop-color="#eeeeee" offset="5%"/><stop stop-color="#eeeeb0" offset="95%"/></linearGradient></defs><style type="text/css">.func_g:hover { stroke:black; stroke-width:0.5; cursor:pointer; }</style><script type="text/ecmascript"><![CDATA[var nametype = 'Function:';
+var fontsize = 12;
+var fontwidth = 0.59;
+var xpad = 10;
+var inverted = false;
+var searchcolor = 'rgb(230,0,230)';]]><![CDATA[var details, searchbtn, matchedtxt, svg;
+function init(evt) {
+    details = document.getElementById("details").firstChild;
+    searchbtn = document.getElementById("search");
+    matchedtxt = document.getElementById("matched");
+    svg = document.getElementsByTagName("svg")[0];
+    searching = 0;
+}
+// mouse-over for info
+function s(node) {		// show
+    info = g_to_text(node);
+    details.nodeValue = nametype + " " + info;
+}
+function c() {			// clear
+    details.nodeValue = ' ';
+}
+// ctrl-F for search
+window.addEventListener("keydown",function (e) {
+    if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+        e.preventDefault();
+        search_prompt();
+    }
+})
+// functions
+function find_child(parent, name, attr) {
+    var children = parent.childNodes;
+    for (var i=0; i<children.length;i++) {
+        if (children[i].tagName == name)
+            return (attr != undefined) ? children[i].attributes[attr].value : children[i];
+    }
+    return;
+}
+function orig_save(e, attr, val) {
+    if (e.attributes["_orig_"+attr] != undefined) return;
+    if (e.attributes[attr] == undefined) return;
+    if (val == undefined) val = e.attributes[attr].value;
+    e.setAttribute("_orig_"+attr, val);
+}
+function orig_load(e, attr) {
+    if (e.attributes["_orig_"+attr] == undefined) return;
+    e.attributes[attr].value = e.attributes["_orig_"+attr].value;
+    e.removeAttribute("_orig_"+attr);
+}
+function g_to_text(e) {
+    var text = find_child(e, "title").firstChild.nodeValue;
+    return (text)
+}
+function g_to_func(e) {
+    var func = g_to_text(e);
+    // if there's any manipulation we want to do to the function
+    // name before it's searched, do it here before returning.
+    return (func);
+}
+function update_text(e) {
+    var r = find_child(e, "rect");
+    var t = find_child(e, "text");
+    var w = parseFloat(r.attributes["width"].value) -3;
+    var txt = find_child(e, "title").textContent.replace(/\\([^(]*\\)\$/,"");
+    t.attributes["x"].value = parseFloat(r.attributes["x"].value) +3;
+    // Smaller than this size won't fit anything
+    if (w < 2*fontsize*fontwidth) {
+        t.textContent = "";
+        return;
+    }
+    t.textContent = txt;
+    // Fit in full text width
+    if (/^ *\$/.test(txt) || t.getSubStringLength(0, txt.length) < w)
+        return;
+    for (var x=txt.length-2; x>0; x--) {
+        if (t.getSubStringLength(0, x+2) <= w) {
+            t.textContent = txt.substring(0,x) + "..";
+            return;
+        }
+    }
+    t.textContent = "";
+}
+// zoom
+function zoom_reset(e) {
+    if (e.attributes != undefined) {
+        orig_load(e, "x");
+        orig_load(e, "width");
+    }
+    if (e.childNodes == undefined) return;
+    for(var i=0, c=e.childNodes; i<c.length; i++) {
+        zoom_reset(c[i]);
+    }
+}
+function zoom_child(e, x, ratio) {
+    if (e.attributes != undefined) {
+        if (e.attributes["x"] != undefined) {
+            orig_save(e, "x");
+            e.attributes["x"].value = (parseFloat(e.attributes["x"].value) - x - xpad) * ratio + xpad;
+            if(e.tagName == "text") e.attributes["x"].value = find_child(e.parentNode, "rect", "x") + 3;
+        }
+        if (e.attributes["width"] != undefined) {
+            orig_save(e, "width");
+            e.attributes["width"].value = parseFloat(e.attributes["width"].value) * ratio;
+        }
+    }
+    if (e.childNodes == undefined) return;
+    for(var i=0, c=e.childNodes; i<c.length; i++) {
+        zoom_child(c[i], x-xpad, ratio);
+    }
+}
+function zoom_parent(e) {
+    if (e.attributes) {
+        if (e.attributes["x"] != undefined) {
+            orig_save(e, "x");
+            e.attributes["x"].value = xpad;
+        }
+        if (e.attributes["width"] != undefined) {
+            orig_save(e, "width");
+            e.attributes["width"].value = parseInt(svg.width.baseVal.value) - (xpad*2);
+        }
+    }
+    if (e.childNodes == undefined) return;
+    for(var i=0, c=e.childNodes; i<c.length; i++) {
+        zoom_parent(c[i]);
+    }
+}
+function zoom(node) {
+    var attr = find_child(node, "rect").attributes;
+    var width = parseFloat(attr["width"].value);
+    var xmin = parseFloat(attr["x"].value);
+    var xmax = parseFloat(xmin + width);
+    var ymin = parseFloat(attr["y"].value);
+    var ratio = (svg.width.baseVal.value - 2*xpad) / width;
+    // XXX: Workaround for JavaScript float issues (fix me)
+    var fudge = 0.0001;
+    var unzoombtn = document.getElementById("unzoom");
+    unzoombtn.style["opacity"] = "1.0";
+    var el = document.getElementsByTagName("g");
+    for(var i=0;i<el.length;i++){
+        var e = el[i];
+        var a = find_child(e, "rect").attributes;
+        var ex = parseFloat(a["x"].value);
+        var ew = parseFloat(a["width"].value);
+        // Is it an ancestor
+        if (!inverted) {
+            var upstack = parseFloat(a["y"].value) > ymin;
+        } else {
+            var upstack = parseFloat(a["y"].value) < ymin;
+        }
+        if (upstack) {
+            // Direct ancestor
+            if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+                e.style["opacity"] = "0.5";
+                zoom_parent(e);
+                e.onclick = function(e){unzoom(); zoom(this);};
+                update_text(e);
+            }
+            // not in current path
+            else
+                e.style["display"] = "none";
+        }
+        // Children maybe
+        else {
+            // no common path
+            if (ex < xmin || ex + fudge >= xmax) {
+                e.style["display"] = "none";
+            }
+            else {
+                zoom_child(e, xmin, ratio);
+                e.onclick = function(e){zoom(this);};
+                update_text(e);
+            }
+        }
+    }
+}
+function unzoom() {
+    var unzoombtn = document.getElementById("unzoom");
+    unzoombtn.style["opacity"] = "0.0";
+    var el = document.getElementsByTagName("g");
+    for(i=0;i<el.length;i++) {
+        el[i].style["display"] = "block";
+        el[i].style["opacity"] = "1";
+        zoom_reset(el[i]);
+        update_text(el[i]);
+    }
+}
+// search
+function reset_search() {
+    var el = document.getElementsByTagName("rect");
+    for (var i=0; i < el.length; i++) {
+        orig_load(el[i], "fill")
+    }
+}
+function search_prompt() {
+    if (!searching) {
+        var term = prompt("Enter a search term (regexp " +
+            "allowed, eg: ^ext4_)", "");
+        if (term != null) {
+            search(term)
+        }
+    } else {
+        reset_search();
+        searching = 0;
+        searchbtn.style["opacity"] = "0.1";
+        searchbtn.firstChild.nodeValue = "Search"
+        matchedtxt.style["opacity"] = "0.0";
+        matchedtxt.firstChild.nodeValue = ""
+    }
+}
+function search(term) {
+    var re = new RegExp(term);
+    var el = document.getElementsByTagName("g");
+    var matches = new Object();
+    var maxwidth = 0;
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i];
+        if (e.attributes["class"].value != "func_g")
+            continue;
+        var func = g_to_func(e);
+        var rect = find_child(e, "rect");
+        if (rect == null) {
+            // the rect might be wrapped in an anchor
+            // if nameattr href is being used
+            if (rect = find_child(e, "a")) {
+                rect = find_child(r, "rect");
+            }
+        }
+        if (func == null || rect == null)
+            continue;
+        // Save max width. Only works as we have a root frame
+        var w = parseFloat(rect.attributes["width"].value);
+        if (w > maxwidth)
+            maxwidth = w;
+        if (func.match(re)) {
+            // highlight
+            var x = parseFloat(rect.attributes["x"].value);
+            orig_save(rect, "fill");
+            rect.attributes["fill"].value = searchcolor;
+            // remember matches
+            if (matches[x] == undefined) {
+                matches[x] = w;
+            } else {
+                if (w > matches[x]) {
+                    // overwrite with parent
+                    matches[x] = w;
+                }
+            }
+            searching = 1;
+        }
+    }
+    if (!searching)
+        return;
+    searchbtn.style["opacity"] = "1.0";
+    searchbtn.firstChild.nodeValue = "Reset Search"
+    // calculate percent matched, excluding vertical overlap
+    var count = 0;
+    var lastx = -1;
+    var lastw = 0;
+    var keys = Array();
+    for (k in matches) {
+        if (matches.hasOwnProperty(k))
+            keys.push(k);
+    }
+    // sort the matched frames by their x location
+    // ascending, then width descending
+    keys.sort(function(a, b){
+        return a - b;
+    });
+    // Step through frames saving only the biggest bottom-up frames
+    // thanks to the sort order. This relies on the tree property
+    // where children are always smaller than their parents.
+    var fudge = 0.0001;	// JavaScript floating point
+    for (var k in keys) {
+        var x = parseFloat(keys[k]);
+        var w = matches[keys[k]];
+        if (x >= lastx + lastw - fudge) {
+            count += w;
+            lastx = x;
+            lastw = w;
+        }
+    }
+    // display matched percent
+    matchedtxt.style["opacity"] = "1.0";
+    pct = 100 * count / maxwidth;
+    if (pct == 100)
+        pct = "100"
+    else
+        pct = pct.toFixed(1)
+    matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+}
+function searchover(e) {
+    searchbtn.style["opacity"] = "1.0";
+}
+function searchout(e) {
+    if (searching) {
+        searchbtn.style["opacity"] = "1.0";
+    } else {
+        searchbtn.style["opacity"] = "0.1";
+    }
+}
+]]></script><rect x="0" y="0" width="1200" height="246" fill="url(#background)"/><text text-anchor="middle" x="600.00" y="24.00" font-size="17" font-family="Verdana" fill="rgb(0, 0, 0)">Flame Graph</text><text id="details" text-anchor="left" x="10.00" y="229.00" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"> </text><text id="unzoom" onclick="unzoom()" style="opacity:0.0;cursor:pointer" text-anchor="left" x="10.00" y="24.00" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">Reset Zoom</text><text id="search" onmouseover="searchover()" onmouseout="searchout()" onclick="search_prompt()" style="opacity:0.1;cursor:pointer" text-anchor="left" x="1090.00" y="24.00" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">Search</text><text id="matched" text-anchor="left" x="1090.00" y="229.00" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"> </text><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>[[heap]] (1 samples, 0.16%)</title><rect x="10" y="165" width="1" height="15" fill="rgb(246,155,16)"/><text text-anchor="left" x="13.00" y="175.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__read (1 samples, 0.16%)</title><rect x="10" y="149" width="1" height="15" fill="rgb(221,83,45)"/><text text-anchor="left" x="13.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>[[stack]] (1 samples, 0.16%)</title><rect x="11" y="165" width="2" height="15" fill="rgb(226,54,19)"/><text text-anchor="left" x="14.00" y="175.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__hrtime (1 samples, 0.16%)</title><rect x="11" y="149" width="2" height="15" fill="rgb(229,213,31)"/><text text-anchor="left" x="14.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>_int_free (1 samples, 0.16%)</title><rect x="13" y="149" width="2" height="15" fill="rgb(229,206,5)"/><text text-anchor="left" x="16.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>syscall (2 samples, 0.32%)</title><rect x="15" y="149" width="4" height="15" fill="rgb(247,84,3)"/><text text-anchor="left" x="18.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__epoll_wait (1 samples, 0.16%)</title><rect x="19" y="149" width="2" height="15" fill="rgb(251,176,40)"/><text text-anchor="left" x="22.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__errno_location (2 samples, 0.32%)</title><rect x="30" y="133" width="4" height="15" fill="rgb(240,155,16)"/><text text-anchor="left" x="33.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__epoll_ctl (46 samples, 7.38%)</title><rect x="34" y="133" width="87" height="15" fill="rgb(240,102,20)"/><text text-anchor="left" x="37.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv__epoll_..</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>syscall (46 samples, 7.38%)</title><rect x="34" y="117" width="87" height="15" fill="rgb(245,22,15)"/><text text-anchor="left" x="37.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">syscall</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>syscall (81 samples, 13.00%)</title><rect x="121" y="117" width="154" height="15" fill="rgb(218,41,34)"/><text text-anchor="left" x="124.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">syscall</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__epoll_wait (82 samples, 13.16%)</title><rect x="121" y="133" width="156" height="15" fill="rgb(207,161,40)"/><text text-anchor="left" x="124.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv__epoll_wait</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>syscall@plt (1 samples, 0.16%)</title><rect x="275" y="117" width="2" height="15" fill="rgb(253,5,1)"/><text text-anchor="left" x="278.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__libc_read (64 samples, 10.27%)</title><rect x="290" y="101" width="121" height="15" fill="rgb(236,116,37)"/><text text-anchor="left" x="293.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">__libc_read</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>on_read_callback (6 samples, 0.96%)</title><rect x="411" y="101" width="11" height="15" fill="rgb(240,204,25)"/><text text-anchor="left" x="414.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__GI___libc_malloc (5 samples, 0.80%)</title><rect x="413" y="85" width="9" height="15" fill="rgb(225,199,25)"/><text text-anchor="left" x="416.00" y="95.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv_write (1 samples, 0.16%)</title><rect x="422" y="101" width="2" height="15" fill="rgb(205,3,3)"/><text text-anchor="left" x="425.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__libc_write (377 samples, 60.51%)</title><rect x="432" y="69" width="714" height="15" fill="rgb(253,62,42)"/><text text-anchor="left" x="435.00" y="79.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">__libc_write</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__io_feed (1 samples, 0.16%)</title><rect x="1146" y="69" width="2" height="15" fill="rgb(223,149,38)"/><text text-anchor="left" x="1149.00" y="79.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__stream_io (461 samples, 74.00%)</title><rect x="277" y="133" width="873" height="15" fill="rgb(227,94,2)"/><text text-anchor="left" x="280.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv__stream_io</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__read (460 samples, 73.84%)</title><rect x="278" y="117" width="872" height="15" fill="rgb(250,186,13)"/><text text-anchor="left" x="281.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv__read</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv_write2 (383 samples, 61.48%)</title><rect x="424" y="101" width="726" height="15" fill="rgb(248,172,50)"/><text text-anchor="left" x="427.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv_write2</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__write (382 samples, 61.32%)</title><rect x="426" y="85" width="724" height="15" fill="rgb(211,201,26)"/><text text-anchor="left" x="429.00" y="95.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv__write</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__write_req_finish (1 samples, 0.16%)</title><rect x="1148" y="69" width="2" height="15" fill="rgb(248,201,43)"/><text text-anchor="left" x="1151.00" y="79.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__io_poll (598 samples, 95.99%)</title><rect x="21" y="149" width="1133" height="15" fill="rgb(212,119,45)"/><text text-anchor="left" x="24.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">uv__io_poll</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__update_time (2 samples, 0.32%)</title><rect x="1150" y="133" width="4" height="15" fill="rgb(227,83,32)"/><text text-anchor="left" x="1153.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__hrtime (2 samples, 0.32%)</title><rect x="1150" y="117" width="4" height="15" fill="rgb(246,62,33)"/><text text-anchor="left" x="1153.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__GI___clock_gettime (2 samples, 0.32%)</title><rect x="1150" y="101" width="4" height="15" fill="rgb(250,29,36)"/><text text-anchor="left" x="1153.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>[unknown] (603 samples, 96.79%)</title><rect x="13" y="165" width="1142" height="15" fill="rgb(210,63,43)"/><text text-anchor="left" x="16.00" y="175.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">[unknown]</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__stream_io (1 samples, 0.16%)</title><rect x="1154" y="149" width="1" height="15" fill="rgb(249,141,26)"/><text text-anchor="left" x="1157.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__loop_alive (1 samples, 0.16%)</title><rect x="1165" y="101" width="2" height="15" fill="rgb(230,183,4)"/><text text-anchor="left" x="1168.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>_int_free (1 samples, 0.16%)</title><rect x="1172" y="53" width="2" height="15" fill="rgb(214,63,31)"/><text text-anchor="left" x="1175.00" y="63.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>free@plt (1 samples, 0.16%)</title><rect x="1174" y="53" width="2" height="15" fill="rgb(247,61,13)"/><text text-anchor="left" x="1177.00" y="63.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__GI___libc_free (1 samples, 0.16%)</title><rect x="1176" y="37" width="2" height="15" fill="rgb(219,99,25)"/><text text-anchor="left" x="1179.00" y="47.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__run_pending (9 samples, 1.44%)</title><rect x="1167" y="101" width="17" height="15" fill="rgb(211,68,29)"/><text text-anchor="left" x="1170.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__stream_io (6 samples, 0.96%)</title><rect x="1172" y="85" width="12" height="15" fill="rgb(224,154,11)"/><text text-anchor="left" x="1175.00" y="95.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__write_callbacks (6 samples, 0.96%)</title><rect x="1172" y="69" width="12" height="15" fill="rgb(245,91,18)"/><text text-anchor="left" x="1175.00" y="79.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>on_write_callback (4 samples, 0.64%)</title><rect x="1176" y="53" width="8" height="15" fill="rgb(234,119,33)"/><text text-anchor="left" x="1179.00" y="63.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>_int_free (3 samples, 0.48%)</title><rect x="1178" y="37" width="6" height="15" fill="rgb(218,119,42)"/><text text-anchor="left" x="1181.00" y="47.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__libc_start_main (13 samples, 2.09%)</title><rect x="1163" y="149" width="25" height="15" fill="rgb(217,112,2)"/><text text-anchor="left" x="1166.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">_..</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>main (13 samples, 2.09%)</title><rect x="1163" y="133" width="25" height="15" fill="rgb(236,59,29)"/><text text-anchor="left" x="1166.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">m..</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv_run (13 samples, 2.09%)</title><rect x="1163" y="117" width="25" height="15" fill="rgb(244,1,52)"/><text text-anchor="left" x="1166.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">u..</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__update_time (2 samples, 0.32%)</title><rect x="1184" y="101" width="4" height="15" fill="rgb(254,210,13)"/><text text-anchor="left" x="1187.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>uv__hrtime (2 samples, 0.32%)</title><rect x="1184" y="85" width="4" height="15" fill="rgb(240,191,4)"/><text text-anchor="left" x="1187.00" y="95.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>__GI___clock_gettime (1 samples, 0.16%)</title><rect x="1186" y="69" width="2" height="15" fill="rgb(246,196,10)"/><text text-anchor="left" x="1189.00" y="79.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>all (623 samples, 100%)</title><rect x="10" y="197" width="1180" height="15" fill="rgb(217,208,2)"/><text text-anchor="left" x="13.00" y="207.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>tcp_uv (623 samples, 100.00%)</title><rect x="10" y="181" width="1180" height="15" fill="rgb(233,40,7)"/><text text-anchor="left" x="13.00" y="191.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">tcp_uv</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>_start (18 samples, 2.89%)</title><rect x="1155" y="165" width="35" height="15" fill="rgb(215,131,1)"/><text text-anchor="left" x="1158.00" y="175.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)">_s..</text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>_dl_start (1 samples, 0.16%)</title><rect x="1188" y="149" width="2" height="15" fill="rgb(229,115,34)"/><text text-anchor="left" x="1191.00" y="159.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>_dl_sysdep_start (1 samples, 0.16%)</title><rect x="1188" y="133" width="2" height="15" fill="rgb(232,187,45)"/><text text-anchor="left" x="1191.00" y="143.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>dl_main (1 samples, 0.16%)</title><rect x="1188" y="117" width="2" height="15" fill="rgb(236,69,49)"/><text text-anchor="left" x="1191.00" y="127.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g><g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)"><title>access (1 samples, 0.16%)</title><rect x="1188" y="101" width="2" height="15" fill="rgb(247,20,43)"/><text text-anchor="left" x="1191.00" y="111.50" font-size="12" font-family="Verdana" fill="rgb(0, 0, 0)"></text></g></svg>

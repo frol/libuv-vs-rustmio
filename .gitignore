@@ -8,5 +8,4 @@ target
 
 env
 
-flamegraph.svg
 perf.data*
