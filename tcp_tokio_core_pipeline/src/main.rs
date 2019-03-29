@@ -15,10 +15,10 @@ impl Codec for BytesCodec {
     type Out = Vec<u8>;
 
     fn decode(&mut self, buf: &mut EasyBuf) -> Result<Option<Self::Out>, io::Error> {
-        if let Some(i) = buf.as_slice().iter().position(|&b| b == b'\n') {
+        if buf.len() > 0 {
             // remove the line, including the '\n', from the buffer
-            let full_line = buf.drain_to(i + 1);
-            Ok(Some(full_line.as_slice().to_owned()))
+            let full_line = buf.split_off(0);
+            Ok(Some(full_line.into()))
         } else {
             Ok(None)
         }

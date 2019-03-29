@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include "uv.h"
@@ -100,15 +101,19 @@ void on_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     }
 
     // if we got here then we have some data in buffer
-    // we are doing basic TCP Echo server
-    // so we need just to copy buffer that we got and write to TCP connection
+    // we are doing basic TCP ping-pong server
+    // so we need just to respond with +PONG response for each command
+    // (new line) and write to TCP connection
     uv_write_t *write_handle = (uv_write_t*) malloc(sizeof(uv_write_t));
     uv_buf_t *writable_buf = (uv_buf_t*) malloc(sizeof(uv_buf_t));
-    ++nread;
-    writable_buf->base = (char*) malloc((size_t)nread);
-    writable_buf->len = (size_t)nread;
-    writable_buf->base[0] = '+';
-    memcpy(writable_buf->base + 1, buf->base, writable_buf->len);
+    char pong_str[] = "+PONG\r\n";
+    size_t pong_length = strlen(pong_str);
+    size_t number_of_commands = std::count(buf->base, buf->base + nread, '\n');
+    writable_buf->len = pong_length * number_of_commands;
+    writable_buf->base = (char*) malloc(writable_buf->len);
+    for (; number_of_commands > 0; --number_of_commands) {
+        memcpy(writable_buf->base + ((number_of_commands - 1) * pong_length), pong_str, pong_length);
+    }
     write_handle->data = writable_buf;
     uv_write(write_handle, stream, writable_buf, 1, on_write_callback);
 }

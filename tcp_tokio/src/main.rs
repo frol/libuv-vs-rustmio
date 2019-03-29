@@ -9,7 +9,7 @@ use bytes::{BufMut, BytesMut};
 struct C;
 
 impl Encoder for C {
-    type Item = u64;
+    type Item = usize;
     type Error = std::io::Error;
     fn encode(
         &mut self,
@@ -17,23 +17,23 @@ impl Encoder for C {
         dst: &mut BytesMut
     ) -> Result<(), Self::Error> {
         const PONG: &[u8] = b"+PONG\r\n";
+        dst.reserve(PONG.len() * item);
         for _ in 0..item {
-            dst.reserve(PONG.len());
-            dst.put(PONG.as_ref());
+            dst.put(&PONG);
         }
         Ok(())
     }
 }
 
 impl Decoder for C {
-    type Item = u64;
+    type Item = usize;
     type Error = std::io::Error;
 
     fn decode(
         &mut self,
         src: &mut BytesMut
     ) -> Result<Option<Self::Item>, Self::Error> {
-        let count = bytecount::count(&src, b'\n') as u64;
+        let count = bytecount::count(&src, b'\n');
         if count > 0 {
             src.clear();
             Ok(Some(count))

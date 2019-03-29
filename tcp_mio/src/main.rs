@@ -98,8 +98,7 @@ fn main() {
                             // reading socket data until the end
                             loop {
                                 // trying to read data from socket
-                                readable_buffer[0] = b'+';
-                                match conn.socket.read(&mut readable_buffer[1..]) {
+                                match conn.socket.read(&mut readable_buffer[..]) {
                                     Ok(mut rs) => {
                                         // if we don't have error and data is not available
                                         // then probably it is EOF for this socket, so we need to close connection
@@ -107,14 +106,15 @@ fn main() {
                                             need_to_close = true;
                                             break;
                                         } else {
-                                            rs += 1;
                                             // writing buffer to socket and getting size of how match bytes written
                                             // if we are getting an error then we will try to write to connecton on next cycle
-                                            let write_size = match conn.socket.write(&readable_buffer[0..rs]) {
+                                            let number_of_commands = readable_buffer[..rs].iter().filter(|&&x| x == b'\n').count();
+                                            let response_buffer = "+PONG\r\n".repeat(number_of_commands).into_bytes();
+                                            let write_size = match conn.socket.write(&response_buffer) {
                                                 Ok(ws) => ws,
                                                 Err(_) => {
                                                     // we need to add buffer back to write it later
-                                                    conn.write_queue.push_back(Vec::from(&readable_buffer[0..rs]));
+                                                    conn.write_queue.push_back(response_buffer);
 
                                                     // making connection writable to fire write event
                                                     poll.reregister(&conn.socket, token, Ready::readable() | Ready::writable(), PollOpt::edge()).unwrap();
@@ -126,7 +126,7 @@ fn main() {
                                             // then we need to split buffer and make connection writable again
                                             if write_size < rs {
                                                 // adding pending data back to the queue for writing it again
-                                                conn.write_queue.push_back(Vec::from(&readable_buffer[write_size..rs]));
+                                                conn.write_queue.push_back(Vec::from(&response_buffer[write_size..]));
 
                                                 // making connection writable to fire write event
                                                 poll.reregister(&conn.socket, token, Ready::readable() | Ready::writable(), PollOpt::edge()).unwrap();

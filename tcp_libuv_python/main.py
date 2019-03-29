@@ -8,7 +8,7 @@ class MyProtocol(asyncio.Protocol):
         self.transport = transport
 
     def data_received(self, data: bytes):
-        number_of_commands = data.count(b"\r\n")
+        number_of_commands = data.count(b"\n")
         self.transport.writelines([b"+PONG\r\n"] * number_of_commands)
 
 def main():
