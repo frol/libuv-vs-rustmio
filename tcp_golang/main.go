@@ -10,7 +10,10 @@ func handleRequest(conn net.Conn) {
 	buf := make([]byte, 4096)
 	for {
 		var count int
-		conn.Read(buf)
+		_, err := conn.Read(buf)
+		if err != nil {
+			break
+		}
 		for i := 0; i < len(buf); i++ {
 			if buf[i] == '\n' {
 				count++
